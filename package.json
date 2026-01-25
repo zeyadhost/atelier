@@ -1,0 +1,21 @@
+{
+    "name": "hazardous-atelier",
+    "version": "1.0.0",
+    "description": "Web-based simulation game featuring procedural content generation, AI-powered image synthesis, and autonomous market simulation.",
+    "author": "Zeyad Bekhet",
+    "license": "MIT",
+    "type": "module",
+    "scripts":{
+        "dev": "vite",
+        "build": "vite build",
+        "preview": "vite preview"
+    },
+    "dependencies": {
+        "react": "^18.3.1",
+        "react-dom": "^18.3.1"
+    },
+    "devDependencies": {
+        "@vitejs/plugin-react": "^4.3.4",
+        "vite": "^6.0.3"
+    }
+}
