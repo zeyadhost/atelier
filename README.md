@@ -1,5 +1,7 @@
 # Hazardous Atelier
 
+![Hackatime Badge](https://hackatime-badge.hackclub.com/U0A7VPG9RD4/HazardousAtelier)
+
 A virtual bakery where you create dangerously delicious pastries from absurd ingredients and sell them to AI customers who may or may not survive.
 
 ## Features
