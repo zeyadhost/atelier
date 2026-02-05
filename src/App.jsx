@@ -1,26 +1,40 @@
 import { useState } from 'react'
+import ReactMarkdown from 'react-markdown'
 
 function App() {
   const [ingredients, setIngredients] = useState('')
   const [isBaking, setIsBaking] = useState(false)
   const [pastryData, setPastryData] = useState(null)
+  const [error, setError] = useState(null)
   
   const [showSplash, setShowSplash] = useState(true)
 
   async function handleBake(e) {
     e.preventDefault()
     if (!ingredients) return
-
     setIsBaking(true)
-    
-    setTimeout(() => {
+    setError(null)
+
+     try {
+      const prompt = `You are a culinary mad scientist describing a dangerous pastry. The user wants to create: "${ingredients}". 
+
+      Describe this pastry in 2-3 sentences. Make it sound both delicious and terrifying. Include what makes it dangerous, its appearance, and potential side effects. Be creative and funny.`
+
+      const response = await puter.ai.chat(prompt, {
+        model: 'gpt-4o-mini'
+      })
+
       setPastryData({
         name: ingredients,
-        description: 'Waiting for AI processing...',
+        description: response.message.content,
         review: 'Waiting for customer...'
       })
+    } catch (err) {
+      console.error('AI Error:', err)
+      setError('Failed to generate pastry description. Please try again.')
+    } finally {
       setIsBaking(false)
-    }, 2000)
+    }
   }
 
   if (showSplash) {
@@ -52,18 +66,30 @@ function App() {
             disabled={isBaking}
           />
           <button type="submit" className="bake-btn" disabled={isBaking}>
-            {isBaking ? '...' : 'CONCOCT'}
+            {isBaking ? '🧪 MIXING...' : 'CONCOCT'}
           </button>
         </form>
+        
+        {error && (
+          <div className="error-message">{error}</div>
+        )}
       </div>
 
-      {pastryData && (
+      {pastryData && !isBaking && (
         <div className="display-case">
           <h2 style={{color: '#000'}}>{pastryData.name}</h2>
-          <p style={{fontStyle: 'italic', color: '#333'}}>{pastryData.description}</p>
+          <div className="description-text">
+            <ReactMarkdown>{pastryData.description}</ReactMarkdown>
+          </div>
           <div className="stamp">PENDING INSPECTION</div>
         </div>
       )}
+
+      <footer className="puter-footer">
+        <a href="https://developer.puter.com" target="_blank" rel="noopener noreferrer">
+          Powered by Puter
+        </a>
+      </footer>
     </div>
   )
 }
