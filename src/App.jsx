@@ -16,22 +16,31 @@ function App() {
     setError(null)
 
      try {
-      const prompt = `You are a culinary mad scientist describing a dangerous pastry. The user wants to create: "${ingredients}". 
+      const prompt = `You are a culinary mad scientist creating a dangerous pastry based on these ingredients: "${ingredients}". 
 
-      Describe this pastry in 2-3 sentences. Make it sound both delicious and terrifying. Include what makes it dangerous, its appearance, and potential side effects. Be creative and funny.`
+Generate a creative pastry name and description. Return ONLY valid JSON in this exact format:
+{
+  "name": "Creative Pastry Name Here",
+  "description": "2-3 sentence description. Make it both delicious and terrifying. Include what makes it dangerous, its appearance, and potential side effects. Be creative and funny."
+}
+
+Do not include any text outside the JSON.`
 
       const response = await puter.ai.chat(prompt, {
         model: 'gpt-4o-mini'
       })
 
+      const jsonText = response.message.content.trim()
+      const parsedData = JSON.parse(jsonText)
+
       setPastryData({
-        name: ingredients,
-        description: response.message.content,
+        name: parsedData.name,
+        description: parsedData.description,
         review: 'Waiting for customer...'
       })
     } catch (err) {
       console.error('AI Error:', err)
-      setError('Failed to generate pastry description. Please try again.')
+      setError('Failed to generate pastry. Please try again.')
     } finally {
       setIsBaking(false)
     }
@@ -60,7 +69,7 @@ function App() {
         <form onSubmit={handleBake}>
           <input
             type="text"
-            placeholder="Input volatile ingredients..."
+            placeholder="Describe your ingredients..."
             value={ingredients}
             onChange={(e) => setIngredients(e.target.value)}
             disabled={isBaking}
