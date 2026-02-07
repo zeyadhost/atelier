@@ -2,6 +2,8 @@ import { useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 
 function App() {
+  puter.setAppID('app-71828b65-4663-4d65-be79-9bd5cf9ffe39')
+  
   const [ingredients, setIngredients] = useState('')
   const [isBaking, setIsBaking] = useState(false)
   const [pastryData, setPastryData] = useState(null)
