@@ -11,6 +11,7 @@ function App() {
   const [imageError, setImageError] = useState(false)
 
   const [showSplash, setShowSplash] = useState(true)
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
 
   async function handleBake(e) {
     e.preventDefault()
@@ -72,7 +73,21 @@ function App() {
       <div className="splash-screen">
         <div className="splash-title">Hazardous Atelier</div>
         <p style={{marginBottom: '2rem', fontWeight: 'bold', fontSize: '1.2rem'}}>Bake, Regret, Repeat</p>
-        <button className="enter-btn" onClick={() => setShowSplash(false)}>
+        <button 
+          className="enter-btn" 
+          onClick={async () => {
+            try {
+              if (!puter.auth.isSignedIn()) {
+                await puter.auth.signIn()
+              }
+              setIsAuthenticated(true)
+              setShowSplash(false)
+            } catch (err) {
+              console.error('Auth error:', err)
+              alert('Authentication required to use this app')
+            }
+          }}
+        >
           OPEN BAKERY
         </button>
       </div>
