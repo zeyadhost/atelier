@@ -6,6 +6,8 @@ function App() {
   const [isBaking, setIsBaking] = useState(false)
   const [pastryData, setPastryData] = useState(null)
   const [error, setError] = useState(null)
+  const [pastryImage, setPastryImage] = useState(null)
+  const [isGeneratingImage, setIsGeneratingImage] = useState(false)
   
   const [showSplash, setShowSplash] = useState(true)
 
@@ -14,17 +16,18 @@ function App() {
     if (!ingredients) return
     setIsBaking(true)
     setError(null)
+    setPastryImage(null)
 
-     try {
+    try {
       const prompt = `You are a culinary mad scientist creating a dangerous pastry based on these ingredients: "${ingredients}". 
 
-Generate a creative pastry name and description. Return ONLY valid JSON in this exact format:
-{
-  "name": "Creative Pastry Name Here",
-  "description": "2-3 sentence description. Make it both delicious and terrifying. Include what makes it dangerous, its appearance, and potential side effects. Be creative and funny."
-}
+  Generate a creative pastry name and description. Return ONLY valid JSON in this exact format:
+  {
+    "name": "Creative Pastry Name Here",
+    "description": "2-3 sentence description. Make it both delicious and terrifying. Include what makes it dangerous, its appearance, and potential side effects. Be creative and funny."
+  }
 
-Do not include any text outside the JSON.`
+  Do not include any text outside the JSON.`
 
       const response = await puter.ai.chat(prompt, {
         model: 'gpt-4o-mini'
@@ -38,11 +41,21 @@ Do not include any text outside the JSON.`
         description: parsedData.description,
         review: 'Waiting for customer...'
       })
+
+      setIsBaking(false)
+      setIsGeneratingImage(true)
+
+      const imagePrompt = `A photorealistic, professional food photography image of: ${parsedData.name}. ${parsedData.description}. Studio lighting, appetizing yet dangerous looking.`
+      
+      const imageElement = await puter.ai.txt2img(imagePrompt)
+      setPastryImage(imageElement.src)
+      setIsGeneratingImage(false)
+
     } catch (err) {
       console.error('AI Error:', err)
       setError('Failed to generate pastry. Please try again.')
-    } finally {
       setIsBaking(false)
+      setIsGeneratingImage(false)
     }
   }
 
@@ -84,9 +97,23 @@ Do not include any text outside the JSON.`
         )}
       </div>
 
-      {pastryData && !isBaking && (
+      {pastryData && (
         <div className="display-case">
           <h2 style={{color: '#000'}}>{pastryData.name}</h2>
+          
+          {isGeneratingImage && (
+            <div className="image-loader">
+              <div className="spinner"></div>
+              <p>Developing photo...</p>
+            </div>
+          )}
+          
+          {pastryImage && !isGeneratingImage && (
+            <div className="polaroid">
+              <img src={pastryImage} alt={pastryData.name} />
+            </div>
+          )}
+          
           <div className="description-text">
             <ReactMarkdown>{pastryData.description}</ReactMarkdown>
           </div>
