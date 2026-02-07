@@ -77,14 +77,15 @@ function App() {
           className="enter-btn" 
           onClick={async () => {
             try {
-              if (!puter.auth.isSignedIn()) {
-                await puter.auth.signIn()
-              }
+              const user = await puter.auth.signIn()
+              console.log('Signed in as:', user)
               setIsAuthenticated(true)
               setShowSplash(false)
             } catch (err) {
               console.error('Auth error:', err)
-              alert('Authentication required to use this app')
+              if (err.message !== 'User cancelled') {
+                alert('Authentication failed. Please try again.')
+              }
             }
           }}
         >
