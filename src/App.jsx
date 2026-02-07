@@ -8,7 +8,8 @@ function App() {
   const [error, setError] = useState(null)
   const [pastryImage, setPastryImage] = useState(null)
   const [isGeneratingImage, setIsGeneratingImage] = useState(false)
-  
+  const [imageError, setImageError] = useState(false)
+
   const [showSplash, setShowSplash] = useState(true)
 
   async function handleBake(e) {
@@ -44,12 +45,19 @@ function App() {
 
       setIsBaking(false)
       setIsGeneratingImage(true)
+      setImageError(false)
 
-      const imagePrompt = `A photorealistic, professional food photography image of: ${parsedData.name}. ${parsedData.description}. Studio lighting, appetizing yet dangerous looking.`
-      
-      const imageElement = await puter.ai.txt2img(imagePrompt)
-      setPastryImage(imageElement.src)
-      setIsGeneratingImage(false)
+      try {
+        const imagePrompt = `A photorealistic, professional food photography image of: ${parsedData.name}. ${parsedData.description}. Studio lighting, appetizing yet dangerous looking.`
+        
+        const imageElement = await puter.ai.txt2img(imagePrompt)
+        setPastryImage(imageElement.src)
+      } catch (imgErr) {
+        console.error('Image Generation Error:', imgErr)
+        setImageError(true)
+      } finally {
+        setIsGeneratingImage(false)
+      }
 
     } catch (err) {
       console.error('AI Error:', err)
@@ -108,7 +116,32 @@ function App() {
             </div>
           )}
           
-          {pastryImage && !isGeneratingImage && (
+          {imageError && !isGeneratingImage && (
+            <div className="image-placeholder">
+              <div className="no-photo-icon">📷</div>
+              <p>Photo Not Available</p>
+              <button 
+                className="retry-btn"
+                onClick={async () => {
+                  setIsGeneratingImage(true)
+                  setImageError(false)
+                  try {
+                    const imagePrompt = `A photorealistic, professional food photography image of: ${pastryData.name}. ${pastryData.description}. Studio lighting, appetizing yet dangerous looking.`
+                    const imageElement = await puter.ai.txt2img(imagePrompt)
+                    setPastryImage(imageElement.src)
+                  } catch (err) {
+                    setImageError(true)
+                  } finally {
+                    setIsGeneratingImage(false)
+                  }
+                }}
+              >
+                Retry Photo
+              </button>
+            </div>
+          )}
+          
+          {pastryImage && !isGeneratingImage && !imageError && (
             <div className="polaroid">
               <img src={pastryImage} alt={pastryData.name} />
             </div>
