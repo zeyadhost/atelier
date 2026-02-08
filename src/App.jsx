@@ -15,6 +15,12 @@ function App() {
   async function handleBake(e) {
     e.preventDefault()
     if (!ingredients) return
+    
+    if (window.location.hostname === 'localhost') {
+      setError('Local dev mode: Deploy to Vercel to test API functions')
+      return
+    }
+    
     setIsBaking(true)
     setError(null)
     setPastryImage(null)
@@ -39,6 +45,16 @@ Do not include any text outside the JSON.`
       })
 
       const data = await response.json()
+      console.log('Text API Response:', data)
+      
+      if (data.error) {
+        throw new Error(data.error)
+      }
+      
+      if (!data.choices || !data.choices[0]?.message?.content) {
+        throw new Error('Invalid API response format')
+      }
+      
       const jsonText = data.choices[0].message.content.trim()
       const parsedData = JSON.parse(jsonText)
 
@@ -65,8 +81,11 @@ Do not include any text outside the JSON.`
 
         const imageData = await imageResponse.json()
         
+        console.log('Image API Response:', imageData)
+        
         if (imageData.error) {
-          throw new Error(imageData.error)
+          console.error('Image API Error:', imageData.error, imageData.details)
+          throw new Error(typeof imageData.error === 'string' ? imageData.error : JSON.stringify(imageData.error))
         }
 
         if (imageData.choices && imageData.choices[0]?.message?.images?.[0]?.image_url?.url) {
@@ -77,7 +96,7 @@ Do not include any text outside the JSON.`
           throw new Error('Invalid image response format')
         }
       } catch (imgErr) {
-        console.error('Image Generation Error:', imgErr)
+        console.error('Image Generation Error:', imgErr.message || imgErr)
         setImageError(true)
       } finally {
         setIsGeneratingImage(false)

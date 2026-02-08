@@ -16,3 +16,5 @@ npm-debug.log*
 *.pem
 *.key
 credentials.json
+.vercel
+.env*.local
