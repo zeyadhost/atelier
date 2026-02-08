@@ -33,13 +33,13 @@ export default async function handler(req, res) {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        model: 'google/gemini-2.5-flash-image-preview',
-        messages: [{ role: 'user', content: prompt }],
-        modalities: ['image', 'text'],
-        image_config: {
-          aspect_ratio: '1:1'
-        },
-        stream: false
+        model: 'google/gemini-2.5-flash-image',
+        messages: [
+          {
+            role: 'user',
+            content: prompt
+          }
+        ]
       })
     })
 
