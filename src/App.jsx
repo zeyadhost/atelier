@@ -64,8 +64,18 @@ Do not include any text outside the JSON.`
         })
 
         const imageData = await imageResponse.json()
-        const imageUrl = imageData.choices[0].message.images[0].image_url.url
-        setPastryImage(imageUrl)
+        
+        if (imageData.error) {
+          throw new Error(imageData.error)
+        }
+
+        if (imageData.choices && imageData.choices[0]?.message?.images?.[0]?.image_url?.url) {
+          const imageUrl = imageData.choices[0].message.images[0].image_url.url
+          setPastryImage(imageUrl)
+        } else {
+          console.error('Unexpected image response format:', imageData)
+          throw new Error('Invalid image response format')
+        }
       } catch (imgErr) {
         console.error('Image Generation Error:', imgErr)
         setImageError(true)
@@ -151,9 +161,19 @@ Do not include any text outside the JSON.`
                     })
 
                     const imageData = await imageResponse.json()
-                    const imageUrl = imageData.choices[0].message.images[0].image_url.url
-                    setPastryImage(imageUrl)
+                    
+                    if (imageData.error) {
+                      throw new Error(imageData.error)
+                    }
+
+                    if (imageData.choices && imageData.choices[0]?.message?.images?.[0]?.image_url?.url) {
+                      const imageUrl = imageData.choices[0].message.images[0].image_url.url
+                      setPastryImage(imageUrl)
+                    } else {
+                      throw new Error('Invalid image response format')
+                    }
                   } catch (err) {
+                    console.error('Retry error:', err)
                     setImageError(true)
                   } finally {
                     setIsGeneratingImage(false)
