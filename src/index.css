@@ -188,13 +188,13 @@ button.bake-btn:disabled {
   font-weight: bold;
 }
 
-.puter-footer {
+.api-footer {
   margin-top: 3rem;
   padding: 1rem;
   text-align: center;
 }
 
-.puter-footer a {
+.api-footer a {
   color: #000;
   text-decoration: none;
   font-weight: bold;
@@ -206,7 +206,7 @@ button.bake-btn:disabled {
   display: inline-block;
 }
 
-.puter-footer a:hover {
+.api-footer a:hover {
   background: #40e0d0;
   transform: translate(-2px, -2px);
   box-shadow: 4px 4px 0 #000;

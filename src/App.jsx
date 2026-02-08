@@ -178,7 +178,7 @@ Do not include any text outside the JSON.`
         </div>
       )}
 
-      <footer className="puter-footer">
+      <footer className="api-footer">
         <a href="https://hackclub.com" target="_blank" rel="noopener noreferrer">
           Powered by Hack Club
         </a>
