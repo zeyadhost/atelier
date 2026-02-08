@@ -2,8 +2,6 @@ import { useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 
 function App() {
-  puter.setAppID('app-71828b65-4663-4d65-be79-9bd5cf9ffe39')
-  
   const [ingredients, setIngredients] = useState('')
   const [isBaking, setIsBaking] = useState(false)
   const [pastryData, setPastryData] = useState(null)
@@ -11,9 +9,8 @@ function App() {
   const [pastryImage, setPastryImage] = useState(null)
   const [isGeneratingImage, setIsGeneratingImage] = useState(false)
   const [imageError, setImageError] = useState(false)
-
+  
   const [showSplash, setShowSplash] = useState(true)
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
 
   async function handleBake(e) {
     e.preventDefault()
@@ -25,19 +22,24 @@ function App() {
     try {
       const prompt = `You are a culinary mad scientist creating a dangerous pastry based on these ingredients: "${ingredients}". 
 
-  Generate a creative pastry name and description. Return ONLY valid JSON in this exact format:
-  {
-    "name": "Creative Pastry Name Here",
-    "description": "2-3 sentence description. Make it both delicious and terrifying. Include what makes it dangerous, its appearance, and potential side effects. Be creative and funny."
-  }
+Generate a creative pastry name and description. Return ONLY valid JSON in this exact format:
+{
+  "name": "Creative Pastry Name Here",
+  "description": "2-3 sentence description. Make it both delicious and terrifying. Include what makes it dangerous, its appearance, and potential side effects. Be creative and funny."
+}
 
-  Do not include any text outside the JSON.`
+Do not include any text outside the JSON.`
 
-      const response = await puter.ai.chat(prompt, {
-        model: 'gpt-4o-mini'
+      const response = await fetch('/api/generate-text', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ prompt })
       })
 
-      const jsonText = response.message.content.trim()
+      const data = await response.json()
+      const jsonText = data.choices[0].message.content.trim()
       const parsedData = JSON.parse(jsonText)
 
       setPastryData({
@@ -53,8 +55,17 @@ function App() {
       try {
         const imagePrompt = `A photorealistic, professional food photography image of: ${parsedData.name}. ${parsedData.description}. Studio lighting, appetizing yet dangerous looking.`
         
-        const imageElement = await puter.ai.txt2img(imagePrompt)
-        setPastryImage(imageElement.src)
+        const imageResponse = await fetch('/api/generate-image', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ prompt: imagePrompt })
+        })
+
+        const imageData = await imageResponse.json()
+        const imageUrl = imageData.choices[0].message.images[0].image_url.url
+        setPastryImage(imageUrl)
       } catch (imgErr) {
         console.error('Image Generation Error:', imgErr)
         setImageError(true)
@@ -75,22 +86,7 @@ function App() {
       <div className="splash-screen">
         <div className="splash-title">Hazardous Atelier</div>
         <p style={{marginBottom: '2rem', fontWeight: 'bold', fontSize: '1.2rem'}}>Bake, Regret, Repeat</p>
-        <button 
-          className="enter-btn" 
-          onClick={async () => {
-            try {
-              const user = await puter.auth.signIn()
-              console.log('Signed in as:', user)
-              setIsAuthenticated(true)
-              setShowSplash(false)
-            } catch (err) {
-              console.error('Auth error:', err)
-              if (err.message !== 'User cancelled') {
-                alert('Authentication failed. Please try again.')
-              }
-            }
-          }}
-        >
+        <button className="enter-btn" onClick={() => setShowSplash(false)}>
           OPEN BAKERY
         </button>
       </div>
@@ -145,8 +141,18 @@ function App() {
                   setImageError(false)
                   try {
                     const imagePrompt = `A photorealistic, professional food photography image of: ${pastryData.name}. ${pastryData.description}. Studio lighting, appetizing yet dangerous looking.`
-                    const imageElement = await puter.ai.txt2img(imagePrompt)
-                    setPastryImage(imageElement.src)
+                    
+                    const imageResponse = await fetch('/api/generate-image', {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json'
+                      },
+                      body: JSON.stringify({ prompt: imagePrompt })
+                    })
+
+                    const imageData = await imageResponse.json()
+                    const imageUrl = imageData.choices[0].message.images[0].image_url.url
+                    setPastryImage(imageUrl)
                   } catch (err) {
                     setImageError(true)
                   } finally {
@@ -173,8 +179,8 @@ function App() {
       )}
 
       <footer className="puter-footer">
-        <a href="https://developer.puter.com" target="_blank" rel="noopener noreferrer">
-          Powered by Puter
+        <a href="https://hackclub.com" target="_blank" rel="noopener noreferrer">
+          Powered by Hack Club
         </a>
       </footer>
     </div>
