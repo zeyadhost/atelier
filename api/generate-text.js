@@ -1,3 +1,21 @@
+const rateLimit = new Map()
+const RATE_LIMIT_WINDOW = 60 * 1000
+const MAX_REQUESTS = 5
+
+function checkRateLimit(ip) {
+    const now = Date.now()
+    const userRequests = rateLimit.get(ip) || []
+    const recentRequests = userRequests.filter(timestamp => now - timestamp < RATE_LIMIT_WINDOW)
+    
+    if (recentRequests.length >= MAX_REQUESTS) {
+        return false
+    }
+    
+    recentRequests.push(now)
+    rateLimit.set(ip, recentRequests)
+    return true
+}
+
 export default async function handler(req, res) {
     const allowedOrigin = 'https://donteatthis.vercel.app'
     const origin = req.headers.origin || req.headers.referer
@@ -16,6 +34,12 @@ export default async function handler(req, res) {
 
     if (req.method !== 'POST') {
         return res.status(405).json({ error: 'Method not allowed' })
+    }
+
+    const ip = req.headers['x-forwarded-for'] || req.headers['x-real-ip'] || req.socket.remoteAddress
+    
+    if (!checkRateLimit(ip)) {
+        return res.status(429).json({ error: 'Too many requests. Please wait a minute.' })
     }
 
     const { prompt } = req.body
