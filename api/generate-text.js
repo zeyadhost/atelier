@@ -1,77 +1,60 @@
-const rateLimit = new Map()
-const RATE_LIMIT_WINDOW = 60 * 1000
-const MAX_REQUESTS = 5
-
-function checkRateLimit(ip) {
-    const now = Date.now()
-    const userRequests = rateLimit.get(ip) || []
-    const recentRequests = userRequests.filter(timestamp => now - timestamp < RATE_LIMIT_WINDOW)
-    
-    if (recentRequests.length >= MAX_REQUESTS) {
-        return false
-    }
-    
-    recentRequests.push(now)
-    rateLimit.set(ip, recentRequests)
-    return true
-}
-
 export default async function handler(req, res) {
-    const allowedOrigin = 'https://donteatthis.vercel.app'
-    const origin = req.headers.origin || req.headers.referer
-
-    if (!origin || !origin.startsWith(allowedOrigin)) {
-        return res.status(403).json({ error: 'Forbidden' })
-    }
-
-    res.setHeader('Access-Control-Allow-Origin', allowedOrigin)
-    res.setHeader('Access-Control-Allow-Methods', 'POST')
+    res.setHeader('Access-Control-Allow-Origin', '*')
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+    if (req.method === 'OPTIONS') return res.status(200).end()
+    if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
-    if (req.method === 'OPTIONS') {
-        return res.status(200).end()
-    }
+    const { prompt, hasDescription } = req.body
+    if (!prompt) return res.status(400).json({ error: 'Missing prompt' })
 
-    if (req.method !== 'POST') {
-        return res.status(405).json({ error: 'Method not allowed' })
-    }
-
-    const ip = req.headers['x-forwarded-for'] || req.headers['x-real-ip'] || req.socket.remoteAddress
-    
-    if (!checkRateLimit(ip)) {
-        return res.status(429).json({ error: 'Too many requests. Please wait a minute.' })
-    }
-
-    const { prompt } = req.body
-    const API_KEY = process.env.VITE_HACKCLUB_API_KEY
-
-    if (!API_KEY) {
-        return res.status(500).json({ error: 'API key not configured' })
-    }
+    const systemMsg = `You generate pastries for "Hazardous Atelier", a dark comedy late-night bakery game with eldritch customers. Respond EXACTLY in this format with no markdown, no code fences, no extra text:\n\nNAME: [creative 2-4 word pastry name]\nASCII:\n[7 lines of ASCII art, max 28 chars each, depicting the pastry]${hasDescription ? '\nDESC: [1-2 sentence darkly humorous description]' : ''}`
 
     try {
-        const response = await fetch('https://ai.hackclub.com/proxy/v1/chat/completions', {
+        const response = await fetch('https://ai.hackclub.com/chat/completions', {
             method: 'POST',
             headers: {
-                'Authorization': `Bearer ${API_KEY}`,
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${process.env.VITE_HACKCLUB_API_KEY}`
             },
             body: JSON.stringify({
                 model: 'qwen/qwen3-32b',
-                messages: [{ role: 'user', content: prompt }]
+                messages: [
+                    { role: 'system', content: systemMsg },
+                    { role: 'user', content: `/no_think\nCustomer order: "${prompt}"` }
+                ]
             })
         })
 
-        const data = await response.json()
+        const text = await response.text()
+        if (!response.ok) return res.status(502).json({ error: 'AI request failed', status: response.status, body: text.slice(0, 300) })
 
-        if (!response.ok) {
-            console.error('API Error:', data)
-            return res.status(response.status).json({ error: data.error || 'Text generation failed' })
+        const data = JSON.parse(text)
+        const content = (data.choices?.[0]?.message?.content || '')
+            .replace(/<think>[\s\S]*?<\/think>/g, '')
+            .replace(/```[\s\S]*?```/g, '')
+            .trim()
+
+        let name = 'Mystery Pastry'
+        let ascii = ['⠀⠀⠀⣴⣯⠟⠛⠻⡝⡗⡀⠀', '⠀⠀⠀⠘⠿⠃⠀⠀⠀⠀⣿⣷', '⠀⠀⠀⠀⠀⠀⠀⠀⢀⣤⣿⡿', '⠀⠀⠀⠀⠀⠀⠀⠀⣞⣿⢟⠁', '⠀⠀⠀⠀⠀⠀⠀⣼⣿⠀⠀⠀', '⠀⠀⠀⠀⠀⠀⠉⠁⠀⠀⠀⠀', '⠀⠀⠀⠀⠀⠀⣿⡟⠀⠀⠀⠀']
+        let description = ''
+
+        const nameMatch = content.match(/NAME:\s*(.+)/i)
+        if (nameMatch) name = nameMatch[1].trim().replace(/[\[\]]/g, '')
+
+        const asciiMatch = content.match(/ASCII:\s*\n([\s\S]*?)(?:\nDESC:|$)/i)
+        if (asciiMatch) {
+            const lines = asciiMatch[1].trim().split('\n').slice(0, 7)
+            if (lines.length >= 3) ascii = lines
         }
 
-        res.status(200).json(data)
-    } catch (error) {
-        console.error('Text generation error:', error)
-        res.status(500).json({ error: 'Failed to generate text', details: error.message })
+        if (hasDescription) {
+            const descMatch = content.match(/DESC:\s*(.+)/i)
+            if (descMatch) description = descMatch[1].trim().replace(/[\[\]]/g, '')
+        }
+
+        res.status(200).json({ name, ascii, description })
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to generate pastry', details: err.message })
     }
 }
