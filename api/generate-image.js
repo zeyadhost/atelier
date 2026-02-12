@@ -9,24 +9,39 @@ export default async function handler(req, res) {
     if (!prompt) return res.status(400).json({ error: 'Missing prompt' })
 
     try {
-        const response = await fetch('https://ai.hackclub.com/images/generations', {
+        const response = await fetch('https://ai.hackclub.com/proxy/v1/chat/completions', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${process.env.VITE_HACKCLUB_API_KEY}`
             },
-            body: JSON.stringify({ prompt, n: 1, size: '256x256' })
+            body: JSON.stringify({
+                model: 'google/gemini-2.0-flash-exp:free',
+                modalities: ['image', 'text'],
+                image_config: { aspect_ratio: '1:1' },
+                messages: [
+                    { role: 'user', content: prompt }
+                ]
+            })
         })
 
         const text = await response.text()
         if (!response.ok) return res.status(502).json({ error: 'AI request failed', status: response.status, body: text.slice(0, 300) })
 
         const data = JSON.parse(text)
-        const url = data.data?.[0]?.url || data.data?.[0]?.b64_json || null
+        const parts = data.choices?.[0]?.message?.content
+        let imageData = null
 
-        if (!url) return res.status(502).json({ error: 'No image returned' })
+        if (Array.isArray(parts)) {
+            const imgPart = parts.find(p => p.type === 'image_url')
+            if (imgPart) imageData = imgPart.image_url?.url || null
+        } else if (typeof parts === 'string' && parts.startsWith('data:image')) {
+            imageData = parts
+        }
 
-        res.status(200).json({ url })
+        if (!imageData) return res.status(502).json({ error: 'No image returned' })
+
+        res.status(200).json({ url: imageData })
     } catch (err) {
         res.status(500).json({ error: 'Failed to generate image', details: err.message })
     }

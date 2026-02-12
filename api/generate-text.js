@@ -5,13 +5,13 @@ export default async function handler(req, res) {
     if (req.method === 'OPTIONS') return res.status(200).end()
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
-    const { prompt, hasDescription } = req.body
+    const { prompt } = req.body
     if (!prompt) return res.status(400).json({ error: 'Missing prompt' })
 
-    const systemMsg = `You generate pastries for "Hazardous Atelier", a dark comedy late-night bakery game with eldritch customers. Respond EXACTLY in this format with no markdown, no code fences, no extra text:\n\nNAME: [creative 2-4 word pastry name]\nASCII:\n[7 lines of ASCII art, max 28 chars each, depicting the pastry]${hasDescription ? '\nDESC: [1-2 sentence darkly humorous description]' : ''}`
+    const systemMsg = 'You generate pastries for "Hazardous Atelier", a dark comedy late-night bakery game with eldritch customers. Respond EXACTLY in this format with no markdown, no code fences, no extra text:\n\nNAME: [creative 2-4 word pastry name]\nDESC: [2-3 sentence darkly humorous description of the pastry, its appearance, smell, and probable side effects]'
 
     try {
-        const response = await fetch('https://ai.hackclub.com/chat/completions', {
+        const response = await fetch('https://ai.hackclub.com/proxy/v1/chat/completions', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -36,24 +36,15 @@ export default async function handler(req, res) {
             .trim()
 
         let name = 'Mystery Pastry'
-        let ascii = ['⠀⠀⠀⣴⣯⠟⠛⠻⡝⡗⡀⠀', '⠀⠀⠀⠘⠿⠃⠀⠀⠀⠀⣿⣷', '⠀⠀⠀⠀⠀⠀⠀⠀⢀⣤⣿⡿', '⠀⠀⠀⠀⠀⠀⠀⠀⣞⣿⢟⠁', '⠀⠀⠀⠀⠀⠀⠀⣼⣿⠀⠀⠀', '⠀⠀⠀⠀⠀⠀⠉⠁⠀⠀⠀⠀', '⠀⠀⠀⠀⠀⠀⣿⡟⠀⠀⠀⠀']
-        let description = ''
+        let description = 'Something went wrong. It smells like burnt code.'
 
         const nameMatch = content.match(/NAME:\s*(.+)/i)
         if (nameMatch) name = nameMatch[1].trim().replace(/[\[\]]/g, '')
 
-        const asciiMatch = content.match(/ASCII:\s*\n([\s\S]*?)(?:\nDESC:|$)/i)
-        if (asciiMatch) {
-            const lines = asciiMatch[1].trim().split('\n').slice(0, 7)
-            if (lines.length >= 3) ascii = lines
-        }
+        const descMatch = content.match(/DESC:\s*(.+)/i)
+        if (descMatch) description = descMatch[1].trim().replace(/[\[\]]/g, '')
 
-        if (hasDescription) {
-            const descMatch = content.match(/DESC:\s*(.+)/i)
-            if (descMatch) description = descMatch[1].trim().replace(/[\[\]]/g, '')
-        }
-
-        res.status(200).json({ name, ascii, description })
+        res.status(200).json({ name, description })
     } catch (err) {
         res.status(500).json({ error: 'Failed to generate pastry', details: err.message })
     }
