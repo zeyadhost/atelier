@@ -19,7 +19,7 @@ const SHOP_ITEMS = [
     id: "model-v2",
     name: "Stable-Pastry v2.0",
     price: 2000,
-    desc: "AI generates detailed descriptions alongside ASCII art.",
+    desc: "AI generates richer, more detailed pastry descriptions.",
     flavor: "Trained on photos of non-poisonous food."
   }
 ]
@@ -109,9 +109,9 @@ export default function CockpitScene() {
   const [money, setMoney] = useState(1000)
   const [ownedItems, setOwnedItems] = useState(new Set())
   const [genSlots, setGenSlots] = useState([
-    { prompt: '', progress: 0, status: 'empty', name: '', ascii: null, description: '' },
-    { prompt: '', progress: 0, status: 'empty', name: '', ascii: null, description: '' },
-    { prompt: '', progress: 0, status: 'empty', name: '', ascii: null, description: '' }
+    { prompt: '', progress: 0, status: 'empty', name: '', description: '' },
+    { prompt: '', progress: 0, status: 'empty', name: '', description: '' },
+    { prompt: '', progress: 0, status: 'empty', name: '', description: '' }
   ])
   const [maxSlots, setMaxSlots] = useState(3)
   const [currentCustomer, setCurrentCustomer] = useState(null)
@@ -288,7 +288,6 @@ export default function CockpitScene() {
   }, [])
 
   const generateWithAI = useCallback(async (slotIndex, prompt) => {
-    const hasV2 = ownedItems.has('model-v2')
     const hasTurbo = ownedItems.has('cpu-turbo')
     const baseTime = hasTurbo ? 7000 : 10000
     const intervalMs = 200
@@ -308,21 +307,19 @@ export default function CockpitScene() {
     genIntervalsRef.current.push(intervalId)
 
     let name = 'Mystery Pastry'
-    let ascii = ['⠀⠀⠀⣴⣯⠟⠛⠻⡝⡗⡀⠀', '⠀⠀⠀⠘⠿⠃⠀⠀⠀⠀⣿⣷', '⠀⠀⠀⠀⠀⠀⠀⠀⢀⣤⣿⡿', '⠀⠀⠀⠀⠀⠀⠀⠀⣞⣿⢟⠁', '⠀⠀⠀⠀⠀⠀⠀⣼⣿⠀⠀⠀', '⠀⠀⠀⠀⠀⠀⠉⠁⠀⠀⠀⠀', '⠀⠀⠀⠀⠀⠀⣿⡟⠀⠀⠀⠀']
     let description = 'The AI had a meltdown. This is what came out.'
 
     try {
       const response = await fetch('/api/generate-text', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, hasDescription: hasV2 })
+        body: JSON.stringify({ prompt })
       })
 
       if (response.ok) {
         const data = await response.json()
         if (data.name) name = data.name
-        if (data.ascii && data.ascii.length >= 3) ascii = data.ascii
-        if (hasV2 && data.description) description = data.description
+        if (data.description) description = data.description
       }
     } catch (e) {
     }
@@ -332,7 +329,7 @@ export default function CockpitScene() {
     setGenSlots(prev => {
       const next = [...prev]
       if (next[slotIndex]) {
-        next[slotIndex] = { ...next[slotIndex], name, ascii, description, progress: 100, status: 'ready' }
+        next[slotIndex] = { ...next[slotIndex], name, description, progress: 100, status: 'ready' }
       }
       return next
     })
@@ -446,7 +443,7 @@ export default function CockpitScene() {
           })
           if (item.id === 'ram-stick') {
             setMaxSlots(4)
-            setGenSlots(prev => [...prev, { prompt: '', progress: 0, status: 'empty', name: '', ascii: null, description: '' }])
+            setGenSlots(prev => [...prev, { prompt: '', progress: 0, status: 'empty', name: '', description: '' }])
           }
           pushSystem(`  \u2713 ${item.name} installed successfully.`)
           pushLines([`  Remaining balance: $${(money - item.price).toFixed(2)}`, ''])
@@ -499,7 +496,7 @@ export default function CockpitScene() {
         }
 
         const newSlots = [...genSlots]
-        newSlots[emptyIdx] = { prompt, progress: 0, status: 'cooking', name: 'Generating...', ascii: null, description: '' }
+        newSlots[emptyIdx] = { prompt, progress: 0, status: 'cooking', name: 'Generating...', description: '' }
         setGenSlots(newSlots)
         generateWithAI(emptyIdx, prompt)
         pushSystem(`  Querying AI core for Slot ${emptyIdx + 1}...`)
@@ -521,7 +518,7 @@ export default function CockpitScene() {
             const bar = '#'.repeat(filled) + '.'.repeat(barLen - filled)
             pushLines([`  SLOT ${i + 1}: [${bar}] ${String(pct).padStart(3)}% - "${slot.name}" [COOKING]`])
           } else if (slot.status === 'ready') {
-            const done = slot.ascii && slot.ascii.length >= 3
+            const done = !!slot.description
             const bar = done ? '#'.repeat(barLen) : '#'.repeat(Math.round((slot.progress / 100) * barLen)) + '.'.repeat(barLen - Math.round((slot.progress / 100) * barLen))
             const label = done ? 'READY' : 'COOKING'
             pushLines([`  SLOT ${i + 1}: [${bar}] ${done ? '100' : String(Math.floor(slot.progress)).padStart(3)}% - "${slot.name}" [${label}]`])
@@ -547,21 +544,12 @@ export default function CockpitScene() {
           return
         }
 
-        const hasV2 = ownedItems.has('model-v2')
-
         pushLines([
           '',
           `  \u2550\u2550\u2550 "${slot.name}" \u2550\u2550\u2550`,
           `  Prompt: "${slot.prompt}"`,
-          ''
-        ])
-        if (slot.ascii) {
-          slot.ascii.forEach(line => pushLines([`    ${line}`]))
-        }
-        if (hasV2 && slot.description) {
-          pushLines(['', `  ${slot.description}`])
-        }
-        pushLines([
+          '',
+          `  ${slot.description}`,
           '',
           '  Status: READY TO SERVE',
           ''
@@ -582,7 +570,7 @@ export default function CockpitScene() {
         }
         const name = slot.name
         const newSlots = [...genSlots]
-        newSlots[slotNum - 1] = { prompt: '', progress: 0, status: 'empty', name: '', ascii: null, description: '' }
+        newSlots[slotNum - 1] = { prompt: '', progress: 0, status: 'empty', name: '', description: '' }
         setGenSlots(newSlots)
         pushSystem(`  Slot ${slotNum} cleared. "${name}" has been discarded.`)
         pushLines([''])
@@ -648,7 +636,7 @@ export default function CockpitScene() {
     const earnings = Math.floor(Math.random() * 300) + 100
     setMoney(prev => prev + earnings)
     const newSlots = [...genSlots]
-    newSlots[slotNum - 1] = { prompt: '', progress: 0, status: 'empty', name: '', ascii: null, description: '' }
+    newSlots[slotNum - 1] = { prompt: '', progress: 0, status: 'empty', name: '', description: '' }
     setGenSlots(newSlots)
     setServeResult({
       pastryName: name,
@@ -718,7 +706,7 @@ export default function CockpitScene() {
     return `${h}:${m}:${s} ${ampm}`
   }
 
-  const readySlots = genSlots.map((s, i) => ({ ...s, index: i + 1 })).filter(s => s.status === 'ready' && s.ascii && s.ascii.length >= 3)
+  const readySlots = genSlots.map((s, i) => ({ ...s, index: i + 1 })).filter(s => s.status === 'ready' && s.description)
 
   return (
     <div className="cockpit">
