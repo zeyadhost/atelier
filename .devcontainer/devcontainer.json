@@ -1,0 +1,42 @@
+{
+  "name": "Hazardous Atelier",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:22",
+  "hostRequirements": {
+    "cpus": 4,
+    "memory": "16gb",
+    "storage": "32gb"
+  },
+  "forwardPorts": [5173],
+  "postCreateCommand": "npm install",
+  "postStartCommand": "npx vite --host 0.0.0.0 --port 5173 &",
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "editor.formatOnSave": true,
+        "editor.bracketPairColorization.enabled": true,
+        "editor.guides.bracketPairs": true,
+        "editor.smoothScrolling": true,
+        "editor.cursorSmoothCaretAnimation": "on",
+        "workbench.iconTheme": "material-icon-theme",
+        "workbench.colorTheme": "One Dark Pro",
+        "files.autoSave": "onFocusChange",
+        "typescript.tsdk": "node_modules/typescript/lib",
+        "search.exclude": {
+          "**/node_modules": true,
+          "**/dist": true
+        }
+      },
+      "extensions": [
+        "ms-vscode.vscode-typescript-next",
+        "pkief.material-icon-theme",
+        "zhuangtongfa.material-theme",
+        "eamodio.gitlens",
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "christian-kohler.npm-intellisense",
+        "christian-kohler.path-intellisense",
+        "streetsidesoftware.code-spell-checker"
+      ]
+    }
+  }
+}
