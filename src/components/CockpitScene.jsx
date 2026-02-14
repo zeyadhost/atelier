@@ -874,12 +874,6 @@ export default function CockpitScene() {
         </div>
         <div className="counter-front">
           <div className="counter-front-panel"></div>
-          <div className="counter-drawer">
-            <div className="drawer-handle"></div>
-          </div>
-          <div className="counter-drawer d2">
-            <div className="drawer-handle"></div>
-          </div>
         </div>
       </div>
 
