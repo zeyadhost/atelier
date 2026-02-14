@@ -55,47 +55,47 @@ const CUSTOMER_CRAVINGS = [
   "Organic nightmares", "Extra frosting", "The forbidden pastry", "Gluten-free chaos"
 ]
 
-const CUSTOMER_REACTIONS = [
-  "Mmm, this hits different at 3AM.",
-  "Hmm... acceptable. Barely.",
-  "*incomprehensible vibrations of approval*",
-  "This isn't what I ordered but I'll take it.",
-  "*squeaks of royal approval*",
-  "In the year 3000 this is considered art.",
-  "My taste receptors are... confused but satisfied.",
-  "I'll give you 3 stars. Out of 5000.",
-  "The void appreciates your offering.",
-  "Not poisonous! A pleasant surprise.",
-  "My circuits detect adequate flavor.",
-  "You call this food? ...I love it.",
-  "*phases through the pastry, absorbs nutrients*",
-  "Chef's kiss. And by chef I mean a war criminal.",
-  "Finally, someone who understands chaos baking."
-]
+const PATIENCE_SECONDS = {
+  'Very Low': 45,
+  'Low': 75,
+  'Medium': 120,
+  'High': 180,
+  'Infinite': 600,
+  'Ticking': 30
+}
 
-const CUSTOMER_REFUSALS = [
-  "Fine. I'll go to Waffle House.",
-  "You WILL be hearing from the health board.",
-  "*phases through the wall*",
-  "I'm leaving a 1-star review.",
-  "My subjects will remember this slight.",
-  "I'll just come back yesterday.",
-  "*emits a frequency that cracks a glass*",
-  "The Yelp review will be legendary.",
-  "You haven't seen the last of me. Literally. I'm invisible.",
-  "I didn't want your pastries anyway. *sobs quietly*"
-]
+function renderMarkdown(text) {
+  if (!text) return text
+  const parts = []
+  let remaining = String(text)
+  let key = 0
+  const regex = /(\*\*(.+?)\*\*|\*(.+?)\*)/g
+  let lastIndex = 0
+  let match
+  while ((match = regex.exec(remaining)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(remaining.slice(lastIndex, match.index))
+    }
+    if (match[2]) {
+      parts.push(React.createElement('strong', { key: key++ }, match[2]))
+    } else if (match[3]) {
+      parts.push(React.createElement('em', { key: key++ }, match[3]))
+    }
+    lastIndex = regex.lastIndex
+  }
+  if (lastIndex < remaining.length) {
+    parts.push(remaining.slice(lastIndex))
+  }
+  return parts.length > 0 ? parts : text
+}
 
 function generateCustomer() {
   const name = CUSTOMER_NAMES[Math.floor(Math.random() * CUSTOMER_NAMES.length)]
   const species = CUSTOMER_SPECIES[Math.floor(Math.random() * CUSTOMER_SPECIES.length)]
   const patience = CUSTOMER_PATIENCE[Math.floor(Math.random() * CUSTOMER_PATIENCE.length)]
   const craving = CUSTOMER_CRAVINGS[Math.floor(Math.random() * CUSTOMER_CRAVINGS.length)]
-  const reaction = CUSTOMER_REACTIONS[Math.floor(Math.random() * CUSTOMER_REACTIONS.length)]
-  const refusal = CUSTOMER_REFUSALS[Math.floor(Math.random() * CUSTOMER_REFUSALS.length)]
-  const colorAvatar = `https://api.dicebear.com/9.x/notionists/svg?seed=${encodeURIComponent(name)}`
-  const bwAvatar = `https://api.dicebear.com/9.x/notionists/svg?seed=${encodeURIComponent(name)}`
-  return { name, species, patience, craving, reaction, refusal, colorAvatar, bwAvatar }
+  const avatar = `https://api.dicebear.com/9.x/notionists/svg?seed=${encodeURIComponent(name)}`
+  return { name, species, patience, craving, avatar }
 }
 
 export default function CockpitScene() {
@@ -109,24 +109,38 @@ export default function CockpitScene() {
   const [money, setMoney] = useState(1000)
   const [ownedItems, setOwnedItems] = useState(new Set())
   const [genSlots, setGenSlots] = useState([
-    { prompt: '', progress: 0, status: 'empty', name: '', description: '' },
-    { prompt: '', progress: 0, status: 'empty', name: '', description: '' },
-    { prompt: '', progress: 0, status: 'empty', name: '', description: '' }
+    { prompt: '', progress: 0, status: 'empty', name: '', description: '', price: 0, bakeTime: 30 },
+    { prompt: '', progress: 0, status: 'empty', name: '', description: '', price: 0, bakeTime: 30 },
+    { prompt: '', progress: 0, status: 'empty', name: '', description: '', price: 0, bakeTime: 30 }
   ])
   const [maxSlots, setMaxSlots] = useState(3)
+  const [bakeSlots, setBakeSlots] = useState(Array.from({ length: 10 }, () => ({ status: 'empty', name: '', price: 0, progress: 0, bakeTime: 30 })))
+  const maxBakeSlots = 10
   const [currentCustomer, setCurrentCustomer] = useState(null)
   const [inputLocked, setInputLocked] = useState(false)
-  const [serveResult, setServeResult] = useState(null)
   const [registerScreen, setRegisterScreen] = useState('main')
+  const [registerDialogue, setRegisterDialogue] = useState(null)
+  const [bellNotice, setBellNotice] = useState(null)
+  const [bellNoticeLeaving, setBellNoticeLeaving] = useState(false)
+  const [dialogueLeaving, setDialogueLeaving] = useState(false)
+  const [servedItems, setServedItems] = useState([])
+  const [patienceRemaining, setPatienceRemaining] = useState(null)
+  const [receipt, setReceipt] = useState(null)
   const bellTimeoutRef = useRef(null)
+  const noticeTimeoutRef = useRef(null)
   const bellAudioRef = useRef(null)
   const pcAmbientRef = useRef(null)
   const cassetteTapeRef = useRef(null)
   const terminalEndRef = useRef(null)
   const terminalInputRef = useRef(null)
   const genIntervalsRef = useRef([])
+  const bakeIntervalsRef = useRef([])
   const buyAnimRef = useRef(null)
-  const serveTimerRef = useRef(null)
+  const patienceIntervalRef = useRef(null)
+  const currentCustomerRef = useRef(null)
+  const servedItemsRef = useRef([])
+  const chitchatIndexRef = useRef(0)
+  const dialogueTimeoutRef = useRef(null)
 
   useEffect(() => {
     bellAudioRef.current = new Audio('/audio/bell-ring.mp3')
@@ -148,9 +162,13 @@ export default function CockpitScene() {
   useEffect(() => {
     return () => {
       if (bellTimeoutRef.current) clearTimeout(bellTimeoutRef.current)
-      if (serveTimerRef.current) clearTimeout(serveTimerRef.current)
+      if (noticeTimeoutRef.current) clearTimeout(noticeTimeoutRef.current)
+      if (patienceIntervalRef.current) clearInterval(patienceIntervalRef.current)
     }
   }, [])
+
+  useEffect(() => { currentCustomerRef.current = currentCustomer }, [currentCustomer])
+  useEffect(() => { servedItemsRef.current = servedItems }, [servedItems])
 
   useEffect(() => {
     if (zoomTarget === 'computer' && cassetteTapeRef.current && pcAmbientRef.current) {
@@ -230,6 +248,7 @@ export default function CockpitScene() {
   useEffect(() => {
     return () => {
       genIntervalsRef.current.forEach(id => clearInterval(id))
+      bakeIntervalsRef.current.forEach(id => clearInterval(id))
       if (buyAnimRef.current) clearTimeout(buyAnimRef.current)
     }
   }, [])
@@ -288,6 +307,82 @@ export default function CockpitScene() {
     animate()
   }, [])
 
+  const dismissBellNotice = useCallback(() => {
+    setBellNoticeLeaving(true)
+    if (noticeTimeoutRef.current) clearTimeout(noticeTimeoutRef.current)
+    noticeTimeoutRef.current = setTimeout(() => {
+      setBellNotice(null)
+      setBellNoticeLeaving(false)
+    }, 400)
+  }, [])
+
+  const showBellNotice = useCallback((notice) => {
+    setBellNoticeLeaving(false)
+    setBellNotice(notice)
+    if (noticeTimeoutRef.current) clearTimeout(noticeTimeoutRef.current)
+    noticeTimeoutRef.current = setTimeout(() => dismissBellNotice(), 3000)
+  }, [dismissBellNotice])
+
+  const startPatienceTimer = useCallback((seconds) => {
+    if (patienceIntervalRef.current) clearInterval(patienceIntervalRef.current)
+    setPatienceRemaining(seconds)
+    patienceIntervalRef.current = setInterval(() => {
+      setPatienceRemaining(prev => {
+        if (prev !== null && prev <= 1) {
+          clearInterval(patienceIntervalRef.current)
+          patienceIntervalRef.current = null
+          return 0
+        }
+        return prev !== null ? prev - 1 : null
+      })
+    }, 1000)
+  }, [])
+
+  const stopPatienceTimer = useCallback(() => {
+    if (patienceIntervalRef.current) {
+      clearInterval(patienceIntervalRef.current)
+      patienceIntervalRef.current = null
+    }
+    setPatienceRemaining(null)
+  }, [])
+
+  const dismissDialogue = useCallback(() => {
+    setDialogueLeaving(true)
+    if (dialogueTimeoutRef.current) clearTimeout(dialogueTimeoutRef.current)
+    dialogueTimeoutRef.current = setTimeout(() => {
+      setRegisterDialogue(null)
+      setDialogueLeaving(false)
+    }, 350)
+  }, [])
+
+  useEffect(() => {
+    if (patienceRemaining === 0) {
+      const customer = currentCustomerRef.current
+      if (!customer) return
+      const currentServed = [...servedItemsRef.current]
+      const requestedItems = customer.requestedItems || []
+      const subtotal = currentServed.reduce((sum, item) => sum + item.price, 0)
+      setRegisterDialogue({
+        name: customer.name,
+        tag: 'LEAVING',
+        text: customer.timeoutDialogue || '*Walks away into the rain.*',
+        options: []
+      })
+      setReceipt({
+        customerName: customer.name,
+        items: currentServed,
+        requestedItems,
+        subtotal,
+        tip: 0,
+        total: subtotal,
+        status: 'timeout'
+      })
+      setCurrentCustomer(null)
+      setRegisterScreen('receipt')
+      setServedItems([])
+    }
+  }, [patienceRemaining])
+
   const generateWithAI = useCallback(async (slotIndex, prompt) => {
     const hasTurbo = ownedItems.has('cpu-turbo')
     const baseTime = hasTurbo ? 7000 : 10000
@@ -309,6 +404,8 @@ export default function CockpitScene() {
 
     let name = 'Mystery Pastry'
     let description = 'The AI had a meltdown. This is what came out.'
+    let price = 120
+    let bakeTime = 30
 
     try {
       const response = await fetch('/api/generate-text', {
@@ -321,6 +418,8 @@ export default function CockpitScene() {
         const data = await response.json()
         if (data.name) name = data.name
         if (data.description) description = data.description
+        if (data.price) price = data.price
+        if (data.bakeTime) bakeTime = data.bakeTime
       }
     } catch (e) {
     }
@@ -330,7 +429,7 @@ export default function CockpitScene() {
     setGenSlots(prev => {
       const next = [...prev]
       if (next[slotIndex]) {
-        next[slotIndex] = { ...next[slotIndex], name, description, progress: 100, status: 'ready' }
+        next[slotIndex] = { ...next[slotIndex], name, description, price, bakeTime, progress: 100, status: 'ready' }
       }
       return next
     })
@@ -365,6 +464,11 @@ export default function CockpitScene() {
         '\u2551    gen list         \u2014 View all slots     \u2551',
         '\u2551    gen view <slot>  \u2014 Preview ready item \u2551',
         '\u2551    gen trash <slot> \u2014 Delete slot item   \u2551',
+        '\u2551                                          \u2551',
+        '\u2551  BAKE COMMANDS:                          \u2551',
+        '\u2551    bake <slot>     \u2014 Bake a gen slot    \u2551',
+        '\u2551    bake list       \u2014 View oven slots    \u2551',
+        '\u2551    bake trash <n>  \u2014 Clear oven slot    \u2551',
         '\u2551                                          \u2551',
         '\u2551  OTHER:                                  \u2551',
         '\u2551    balance         \u2014 Check funds         \u2551',
@@ -444,7 +548,7 @@ export default function CockpitScene() {
           })
           if (item.id === 'ram-stick') {
             setMaxSlots(4)
-            setGenSlots(prev => [...prev, { prompt: '', progress: 0, status: 'empty', name: '', description: '' }])
+            setGenSlots(prev => [...prev, { prompt: '', progress: 0, status: 'empty', name: '', description: '', price: 0, bakeTime: 30 }])
           }
           pushSystem(`  \u2713 ${item.name} installed successfully.`)
           pushLines([`  Remaining balance: $${(money - item.price).toFixed(2)}`, ''])
@@ -552,6 +656,7 @@ export default function CockpitScene() {
           '',
           `  ${slot.description}`,
           '',
+          `  Price: $${slot.price}  |  Bake Time: ${slot.bakeTime || 30}s`,
           '  Status: READY TO SERVE',
           ''
         ])
@@ -571,7 +676,7 @@ export default function CockpitScene() {
         }
         const name = slot.name
         const newSlots = [...genSlots]
-        newSlots[slotNum - 1] = { prompt: '', progress: 0, status: 'empty', name: '', description: '' }
+        newSlots[slotNum - 1] = { prompt: '', progress: 0, status: 'empty', name: '', description: '', price: 0, bakeTime: 30 }
         setGenSlots(newSlots)
         pushSystem(`  Slot ${slotNum} cleared. "${name}" has been discarded.`)
         pushLines([''])
@@ -582,6 +687,97 @@ export default function CockpitScene() {
       return
     }
 
+    if (cmd === 'bake') {
+      const sub = parts[1]
+
+      if (sub === 'list') {
+        pushLines(['', '  ──────────────────────────────────────────────────'])
+        bakeSlots.forEach((slot, i) => {
+          if (i >= maxBakeSlots) return
+          if (slot.status === 'empty') {
+            pushLines([`  OVEN ${i + 1}: [EMPTY]`])
+          } else if (slot.status === 'baking') {
+            const pct = Math.floor(slot.progress)
+            const barLen = 15
+            const filled = Math.round((pct / 100) * barLen)
+            const bar = '#'.repeat(filled) + '.'.repeat(barLen - filled)
+            pushLines([`  OVEN ${i + 1}: [${bar}] ${String(pct).padStart(3)}% - "${slot.name}" [BAKING]`])
+          } else {
+            pushLines([`  OVEN ${i + 1}: "${slot.name}" ($${slot.price}) [READY]`])
+          }
+        })
+        pushLines(['  ──────────────────────────────────────────────────', ''])
+        return
+      }
+
+      if (sub === 'trash') {
+        const slotNum = parseInt(parts[2])
+        if (!slotNum || slotNum < 1 || slotNum > maxBakeSlots) {
+          pushError(`  ERROR: Usage: bake trash <1-${maxBakeSlots}>`)
+          return
+        }
+        const slot = bakeSlots[slotNum - 1]
+        if (slot.status === 'empty') {
+          pushError(`  ERROR: Oven slot ${slotNum} is already empty.`)
+          return
+        }
+        const name = slot.name
+        const newBake = [...bakeSlots]
+        newBake[slotNum - 1] = { status: 'empty', name: '', price: 0, progress: 0, bakeTime: 30 }
+        setBakeSlots(newBake)
+        pushSystem(`  Oven slot ${slotNum} cleared. "${name}" discarded.`)
+        pushLines([''])
+        return
+      }
+
+      if (!sub) {
+        pushError('  ERROR: Usage: bake <gen_slot>, bake list, or bake trash <oven_slot>')
+        return
+      }
+
+      const slotNum = parseInt(sub)
+      if (!slotNum || slotNum < 1 || slotNum > maxSlots) {
+        pushError(`  ERROR: Usage: bake <1-${maxSlots}>, bake list, or bake trash <oven_slot>`)
+        return
+      }
+      const slot = genSlots[slotNum - 1]
+      if (slot.status !== 'ready' || !slot.description) {
+        pushError(`  ERROR: Slot ${slotNum} is not ready to bake.`)
+        return
+      }
+      const emptyBake = bakeSlots.findIndex(b => b.status === 'empty')
+      if (emptyBake === -1) {
+        pushError(`  ERROR: All ${maxBakeSlots} oven slots are full. Use bake trash <slot>.`)
+        return
+      }
+      const bakeTime = slot.bakeTime || 30
+      const newBake = [...bakeSlots]
+      newBake[emptyBake] = { status: 'baking', name: slot.name, price: slot.price || 0, progress: 0, bakeTime }
+      setBakeSlots(newBake)
+      pushSystem(`  ✓ "${slot.name}" placed in Oven Slot ${emptyBake + 1}. Baking for ${bakeTime}s...`)
+      pushLines([''])
+
+      const intervalMs = 500
+      const tick = 100 / (bakeTime * 1000 / intervalMs)
+      const bakeIntervalId = setInterval(() => {
+        setBakeSlots(prev => {
+          const next = [...prev]
+          if (next[emptyBake] && next[emptyBake].status === 'baking') {
+            const newProgress = Math.min(100, next[emptyBake].progress + tick)
+            if (newProgress >= 100) {
+              next[emptyBake] = { ...next[emptyBake], progress: 100, status: 'ready' }
+              clearInterval(bakeIntervalId)
+            } else {
+              next[emptyBake] = { ...next[emptyBake], progress: newProgress }
+            }
+          }
+          return next
+        })
+      }, intervalMs)
+      bakeIntervalsRef.current.push(bakeIntervalId)
+      return
+    }
+
     if (cmd === 'serve' || cmd === 'refuse' || cmd === 'scan') {
       pushError("  ERROR: Service commands moved to the REGISTER.")
       pushLines(["  Click the POS device on the right wall to serve, refuse, or scan."])
@@ -589,7 +785,7 @@ export default function CockpitScene() {
     }
 
     pushError(`  ERROR: Unknown command "${cmd}". Type 'help' for a list of commands.`)
-  }, [money, ownedItems, genSlots, maxSlots, pushLines, pushError, pushSystem, pushInput, animateProgressBar, generateWithAI])
+  }, [money, ownedItems, genSlots, maxSlots, bakeSlots, maxBakeSlots, currentCustomer, pushLines, pushError, pushSystem, pushInput, animateProgressBar, generateWithAI])
 
   const handleTerminalKeyDown = useCallback((e) => {
     if (e.key === 'Enter' && !inputLocked) {
@@ -621,49 +817,170 @@ export default function CockpitScene() {
   const handleBellClick = useCallback(() => {
     if (bellAnimating) return
     ringBell()
-    if (!currentCustomer) {
-      setCurrentCustomer(generateCustomer())
+    const readyCount = genSlots.filter(s => s.status === 'ready' && s.description).length
+    if (readyCount < 2) {
+      showBellNotice({ type: 'warning', title: 'Need More Pastries', text: 'Generate at least 2 pastries before ringing the bell.' })
+      return
     }
-  }, [bellAnimating, currentCustomer, ringBell])
+    if (currentCustomer) {
+      showBellNotice({ type: 'info', title: 'Customer Waiting', text: `${currentCustomer.name} is already at the window.` })
+      return
+    }
+    const customer = generateCustomer()
+    const patienceSeconds = PATIENCE_SECONDS[customer.patience] || 120
+    setCurrentCustomer({ ...customer, patienceSeconds })
+    setServedItems([])
+    setReceipt(null)
+    chitchatIndexRef.current = 0
+    setDialogueLeaving(false)
+    setRegisterDialogue({ name: customer.name, tag: 'ORDER', text: '...', options: [] })
+    const menu = genSlots
+      .map((slot, i) => ({ ...slot, index: i + 1 }))
+      .filter(slot => slot.status === 'ready' && slot.description)
+      .map(slot => ({ name: slot.name, price: slot.price || 0 }))
+    fetch('/api/generate-dialogue', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ customer, menu })
+    })
+      .then(res => res.json())
+      .then(data => {
+        const positiveReply = data.positiveReply || { text: '"Coming right up!"', response: 'Good. Make it fast.' }
+        const negativeReply = data.negativeReply || { text: '"Ugh, fine..."', response: '*Glares.* Watch the attitude.' }
+        const requestedItems = Array.isArray(data.requestedItems) ? data.requestedItems : [menu[0]?.name || '']
+        const replies = [
+          { id: 'positive', text: positiveReply.text, response: positiveReply.response, mood: 'positive' },
+          { id: 'negative', text: negativeReply.text, response: negativeReply.response, mood: 'negative' }
+        ]
+        setCurrentCustomer(prev => prev ? {
+          ...prev,
+          requestedItems,
+          positiveReaction: data.positiveReaction || '*Takes a bite.* Not bad. **Not bad at all.**',
+          negativeReaction: data.negativeReaction || 'This is **not** what I ordered. *Are you even listening?*',
+          timeoutDialogue: data.timeoutDialogue || '*Checks watch.* Forget it. **I have places to be.**',
+          leavingMessage: data.leavingMessage || '*Scoffs.* Fine. **I didn\'t want your pastries anyway.** *Storms off.*',
+          chitchat: Array.isArray(data.chitchat) ? data.chitchat : [],
+          tip: data.tip || 0,
+          mood: null
+        } : prev)
+        setRegisterDialogue({ name: customer.name, tag: 'ORDER', text: data.greeting || 'Evening. Got anything edible?', options: replies })
+      })
+      .catch(() => {
+        setRegisterDialogue({ name: customer.name, tag: 'ORDER', text: 'Evening. Got anything edible?', options: [] })
+      })
+  }, [bellAnimating, currentCustomer, ringBell, genSlots, showBellNotice])
 
-  const handleServe = useCallback((slotNum) => {
-    const slot = genSlots[slotNum - 1]
+  const handleServe = useCallback((bakeIndex) => {
+    const slot = bakeSlots[bakeIndex]
     if (!slot || slot.status !== 'ready') return
     if (!currentCustomer) return
 
     ringBell()
 
     const name = slot.name
-    const earnings = Math.floor(Math.random() * 300) + 100
-    setMoney(prev => prev + earnings)
-    const newSlots = [...genSlots]
-    newSlots[slotNum - 1] = { prompt: '', progress: 0, status: 'empty', name: '', description: '' }
-    setGenSlots(newSlots)
-    setServeResult({
-      pastryName: name,
-      customerName: currentCustomer.name,
-      reaction: currentCustomer.reaction,
-      earnings
-    })
-    setCurrentCustomer(null)
-    setRegisterScreen('main')
-    if (serveTimerRef.current) clearTimeout(serveTimerRef.current)
-    serveTimerRef.current = setTimeout(() => setServeResult(null), 5000)
-  }, [genSlots, currentCustomer, ringBell])
+    const requestedItems = currentCustomer.requestedItems || []
+    const unservedItems = requestedItems.filter(reqName =>
+      !servedItems.some(s => s.name.toLowerCase().trim() === reqName.toLowerCase().trim())
+    )
+    const isCorrectOrder = unservedItems.some(
+      reqName => name.toLowerCase().trim() === reqName.toLowerCase().trim()
+    )
+
+    const newBake = [...bakeSlots]
+    newBake[bakeIndex] = { status: 'empty', name: '', price: 0, progress: 0, bakeTime: 30 }
+    setBakeSlots(newBake)
+
+    if (isCorrectOrder) {
+      const price = slot.price || 0
+      setMoney(prev => prev + price)
+      const newServed = [...servedItems, { name, price }]
+      setServedItems(newServed)
+
+      const allDone = requestedItems.every(reqName =>
+        newServed.some(s => s.name.toLowerCase().trim() === reqName.toLowerCase().trim())
+      )
+
+      if (allDone) {
+        const tip = currentCustomer.mood === 'positive' ? (currentCustomer.tip || 0) : 0
+        if (tip > 0) setMoney(prev => prev + tip)
+        const subtotal = newServed.reduce((sum, item) => sum + item.price, 0)
+        setReceipt({
+          customerName: currentCustomer.name,
+          items: newServed,
+          requestedItems,
+          subtotal,
+          tip,
+          total: subtotal + tip,
+          status: 'complete'
+        })
+        setRegisterDialogue({
+          name: currentCustomer.name,
+          tag: 'HAPPY',
+          text: currentCustomer.positiveReaction || '*Takes a bite.* Not bad. **Not bad at all.**',
+          options: []
+        })
+        stopPatienceTimer()
+        setCurrentCustomer(null)
+        setRegisterScreen('receipt')
+        setServedItems([])
+      } else {
+        setRegisterScreen('main')
+        showBellNotice({ type: 'info', title: 'Item Served', text: `"${name}" checked off. ${unservedItems.length - 1} more to go.` })
+      }
+    } else {
+      stopPatienceTimer()
+      const currentServed = [...servedItems]
+      const subtotal = currentServed.reduce((sum, item) => sum + item.price, 0)
+      setReceipt({
+        customerName: currentCustomer.name,
+        items: currentServed,
+        requestedItems,
+        subtotal,
+        tip: 0,
+        total: subtotal,
+        status: 'wrong',
+        wrongItem: name
+      })
+      setRegisterDialogue({
+        name: currentCustomer.name,
+        tag: 'ANGRY',
+        text: currentCustomer.negativeReaction || 'This is **not** what I ordered. *Are you even listening?*',
+        options: []
+      })
+      setCurrentCustomer(null)
+      setRegisterScreen('receipt')
+      setServedItems([])
+    }
+  }, [bakeSlots, currentCustomer, ringBell, servedItems, showBellNotice, stopPatienceTimer])
 
   const handleRefuse = useCallback(() => {
     if (!currentCustomer) return
-    setServeResult({
-      pastryName: null,
-      customerName: currentCustomer.name,
-      reaction: currentCustomer.refusal,
-      earnings: 0
-    })
+    const refundAmount = servedItems.reduce((sum, item) => sum + item.price, 0)
+    if (refundAmount > 0) {
+      setMoney(prev => prev - refundAmount)
+    }
+    stopPatienceTimer()
+    const leaveName = currentCustomer.name
+    const leaveText = currentCustomer.leavingMessage || '*Scoffs.* Fine. **I\'ll take my business elsewhere.**'
     setCurrentCustomer(null)
+    setServedItems([])
+    setZoomTarget(null)
     setRegisterScreen('main')
-    if (serveTimerRef.current) clearTimeout(serveTimerRef.current)
-    serveTimerRef.current = setTimeout(() => setServeResult(null), 4000)
-  }, [currentCustomer])
+    setRegisterDialogue({
+      name: leaveName,
+      tag: 'LEAVING',
+      text: leaveText,
+      options: []
+    })
+    if (dialogueTimeoutRef.current) clearTimeout(dialogueTimeoutRef.current)
+    dialogueTimeoutRef.current = setTimeout(() => {
+      setDialogueLeaving(true)
+      setTimeout(() => {
+        setRegisterDialogue(null)
+        setDialogueLeaving(false)
+      }, 350)
+    }, 2500)
+  }, [currentCustomer, servedItems, stopPatienceTimer])
 
   const handleComputerClick = useCallback(() => {
     setZoomTarget('computer')
@@ -709,7 +1026,7 @@ export default function CockpitScene() {
     return `${h}:${m}:${s} ${ampm}`
   }
 
-  const readySlots = genSlots.map((s, i) => ({ ...s, index: i + 1 })).filter(s => s.status === 'ready' && s.description)
+  const readyBakeSlots = bakeSlots.map((s, i) => ({ ...s, index: i })).filter(s => s.status === 'ready')
 
   return (
     <div className="cockpit">
@@ -798,7 +1115,7 @@ export default function CockpitScene() {
                       <div className="customer-name-tag">{currentCustomer.name}</div>
                       <img
                         className="customer-avatar-bw"
-                        src={currentCustomer.bwAvatar}
+                        src={currentCustomer.avatar}
                         alt={currentCustomer.name}
                         draggable={false}
                       />
@@ -877,6 +1194,67 @@ export default function CockpitScene() {
         </div>
       </div>
 
+      {bellNotice && (
+        <div className={`bell-notice bell-notice-${bellNotice.type || 'info'} ${bellNoticeLeaving ? 'bell-notice-leaving' : ''}`}>
+          <div className="bell-notice-icon">{bellNotice.type === 'warning' ? '\u26a0' : '\u2139'}</div>
+          <div className="bell-notice-content">
+            <div className="bell-notice-title">{bellNotice.title}</div>
+            <div className="bell-notice-text">{bellNotice.text}</div>
+          </div>
+        </div>
+      )}
+
+      {registerDialogue && (
+        <div className={`register-dialogue${dialogueLeaving ? ' register-dialogue-leaving' : ''}`}>
+          <div className="register-dialogue-bar">
+            <div className="register-dialogue-name">{registerDialogue.name}</div>
+            <div className="register-dialogue-bar-right">
+              {registerDialogue.tag && (
+                <div className="register-dialogue-tag">{registerDialogue.tag}</div>
+              )}
+              <button className="register-dialogue-close" onClick={dismissDialogue}>{"\u00d7"}</button>
+            </div>
+          </div>
+          <div className="register-dialogue-text" onClick={() => {
+            const customer = currentCustomerRef.current
+            if (customer?.mood === 'positive' && customer?.chitchat?.length > 0 && registerDialogue.options.length === 0 && registerDialogue.tag !== 'LEAVING' && registerDialogue.tag !== 'HAPPY' && registerDialogue.tag !== 'ANGRY') {
+              const idx = chitchatIndexRef.current % customer.chitchat.length
+              setRegisterDialogue(prev => prev ? ({
+                ...prev,
+                tag: 'CHAT',
+                text: customer.chitchat[idx]
+              }) : prev)
+              chitchatIndexRef.current++
+            }
+          }}>{renderMarkdown(registerDialogue.text)}</div>
+          {registerDialogue.options.length > 0 && (
+            <div className="register-dialogue-options">
+              {registerDialogue.options.map(option => (
+                <button
+                  key={option.id}
+                  className={`register-dialogue-option ${option.mood === 'positive' ? 'reply-positive' : 'reply-negative'}`}
+                  onClick={() => {
+                    const customer = currentCustomerRef.current
+                    if (customer?.patienceSeconds) {
+                      startPatienceTimer(customer.patienceSeconds)
+                    }
+                    setCurrentCustomer(prev => prev ? { ...prev, mood: option.mood } : prev)
+                    setRegisterDialogue(prev => ({
+                      name: prev.name,
+                      tag: option.mood === 'positive' ? 'FRIENDLY' : 'RUDE',
+                      text: option.response,
+                      options: []
+                    }))
+                  }}
+                >
+                  {option.text}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="floor-strip">
         <div className="floor-tile"></div>
         <div className="floor-tile dark"></div>
@@ -891,6 +1269,21 @@ export default function CockpitScene() {
         <div className="floor-tile"></div>
         <div className="floor-tile dark"></div>
       </div>
+
+      {currentCustomer && patienceRemaining !== null && currentCustomer.patienceSeconds && (
+        <div className="patience-hud">
+          <div className="patience-hud-name">{currentCustomer.name}</div>
+          <div className="patience-hud-row">
+            <div className="patience-hud-bar-track">
+              <div
+                className={`patience-hud-bar-fill ${patienceRemaining / currentCustomer.patienceSeconds <= 0.25 ? 'critical' : patienceRemaining / currentCustomer.patienceSeconds <= 0.5 ? 'warning' : ''}`}
+                style={{ width: `${(patienceRemaining / currentCustomer.patienceSeconds) * 100}%` }}
+              />
+            </div>
+            <div className="patience-hud-time">{Math.floor(patienceRemaining / 60)}:{(patienceRemaining % 60).toString().padStart(2, '0')}</div>
+          </div>
+        </div>
+      )}
 
       <div className="ambient-light"></div>
       <div className="oven-ambient"></div>
@@ -1002,42 +1395,49 @@ export default function CockpitScene() {
                             <div className="register-customer-card">
                               <img
                                 className="register-customer-avatar"
-                                src={currentCustomer.colorAvatar}
+                                src={currentCustomer.avatar}
                                 alt={currentCustomer.name}
                                 draggable={false}
                               />
                               <div className="register-customer-details">
                                 <div className="register-customer-name">{currentCustomer.name}</div>
-                                <div className="register-customer-waiting">Waiting at window...</div>
                                 <div className="register-scan-results">
                                   <div className="register-scan-row"><span className="scan-label">Species:</span> <span className="scan-value">{currentCustomer.species}</span></div>
                                   <div className="register-scan-row"><span className="scan-label">Patience:</span> <span className="scan-value">{currentCustomer.patience}</span></div>
                                   <div className="register-scan-row"><span className="scan-label">Craving:</span> <span className="scan-value">{currentCustomer.craving}</span></div>
                                 </div>
                               </div>
+                              {patienceRemaining !== null && currentCustomer.patienceSeconds && (
+                                <div className="patience-bar-container">
+                                  <div className="patience-bar-label">
+                                    {Math.floor(patienceRemaining / 60)}:{(patienceRemaining % 60).toString().padStart(2, '0')}
+                                  </div>
+                                  <div className="patience-bar-track">
+                                    <div
+                                      className={`patience-bar-fill ${patienceRemaining / currentCustomer.patienceSeconds <= 0.25 ? 'critical' : patienceRemaining / currentCustomer.patienceSeconds <= 0.5 ? 'warning' : ''}`}
+                                      style={{ width: `${(patienceRemaining / currentCustomer.patienceSeconds) * 100}%` }}
+                                    />
+                                  </div>
+                                </div>
+                              )}
+                              {currentCustomer.requestedItems && currentCustomer.requestedItems.length > 0 && (
+                                <div className="order-checklist">
+                                  <div className="order-checklist-title">ORDER</div>
+                                  {currentCustomer.requestedItems.map((itemName, idx) => {
+                                    const isServed = servedItems.some(s => s.name.toLowerCase().trim() === itemName.toLowerCase().trim())
+                                    return (
+                                      <div key={idx} className={`order-checklist-item ${isServed ? 'served' : ''}`}>
+                                        <span className="order-check">{isServed ? '\u2713' : '\u25cb'}</span>
+                                        <span className="order-item-name">{itemName}</span>
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                              )}
                             </div>
                           ) : (
                             <div className="register-no-customer">
-                              {serveResult ? (
-                                <div className="register-serve-result">
-                                  {serveResult.earnings > 0 ? (
-                                    <>
-                                      <div className="serve-result-icon">{'\u2605'}</div>
-                                      <div className="serve-result-text">Served "{serveResult.pastryName}" to {serveResult.customerName}</div>
-                                      <div className="serve-result-reaction">"{serveResult.reaction}"</div>
-                                      <div className="serve-result-earnings">+${serveResult.earnings}</div>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <div className="serve-result-icon refuse">{'\u2716'}</div>
-                                      <div className="serve-result-text">Dismissed {serveResult.customerName}</div>
-                                      <div className="serve-result-reaction">"{serveResult.reaction}"</div>
-                                    </>
-                                  )}
-                                </div>
-                              ) : (
-                                <div className="register-empty-msg">No customer at window. Ring the bell.</div>
-                              )}
+                              <div className="register-empty-msg">No customer at window. Ring the bell.</div>
                             </div>
                           )}
                         </div>
@@ -1054,26 +1454,91 @@ export default function CockpitScene() {
                     {registerScreen === 'serve' && (
                       <>
                         <div className="zoomed-pos-items">
-                          {readySlots.length > 0 ? (
+                          {readyBakeSlots.length > 0 ? (
                             <div className="register-serve-slots">
-                              {readySlots.map(slot => (
+                              {readyBakeSlots.map(slot => (
                                 <div
                                   key={slot.index}
                                   className="register-serve-slot-btn"
                                   onClick={() => handleServe(slot.index)}
                                 >
-                                  <span className="serve-slot-num">SLOT {slot.index}</span>
+                                  <span className="serve-slot-num">OVEN {slot.index + 1}</span>
                                   <span className="serve-slot-name">"{slot.name}"</span>
                                 </div>
                               ))}
                             </div>
                           ) : (
                             <div className="register-no-customer">
-                              <div className="register-empty-msg">No pastries available.</div>
+                              <div className="register-empty-msg">No baked pastries ready. Use the terminal to bake.</div>
                             </div>
                           )}
                         </div>
                         <div className="zoomed-pos-btn zp-gray" onClick={() => setRegisterScreen('main')}>BACK</div>
+                      </>
+                    )}
+
+                    {registerScreen === 'receipt' && receipt && (
+                      <>
+                        <div className="zoomed-pos-items">
+                          <div className="receipt-container">
+                            <div className="receipt-header">HAZARDOUS ATELIER</div>
+                            <div className="receipt-subheader">Customer: {receipt.customerName}</div>
+                            <div className="receipt-divider"></div>
+                            {receipt.status === 'complete' && (
+                              <div className="receipt-status receipt-complete">{'\u2605'} ORDER COMPLETE</div>
+                            )}
+                            {receipt.status === 'wrong' && (
+                              <div className="receipt-status receipt-wrong">{'\u2716'} WRONG ORDER{receipt.wrongItem ? ` ("${receipt.wrongItem}")` : ''}</div>
+                            )}
+                            {receipt.status === 'timeout' && (
+                              <div className="receipt-status receipt-timeout">{'\u23f0'} CUSTOMER LEFT</div>
+                            )}
+                            <div className="receipt-divider"></div>
+                            <div className="receipt-section-title">SERVED</div>
+                            {receipt.items.length > 0 ? receipt.items.map((item, idx) => (
+                              <div key={idx} className="receipt-item-row">
+                                <span className="receipt-item-name">{item.name}</span>
+                                <span className="receipt-item-price">${item.price}</span>
+                              </div>
+                            )) : (
+                              <div className="receipt-item-row receipt-empty">No items served</div>
+                            )}
+                            {receipt.requestedItems.length > receipt.items.length && (
+                              <>
+                                <div className="receipt-divider"></div>
+                                <div className="receipt-section-title">UNFULFILLED</div>
+                                {receipt.requestedItems.filter(reqName =>
+                                  !receipt.items.some(s => s.name.toLowerCase().trim() === reqName.toLowerCase().trim())
+                                ).map((name, idx) => (
+                                  <div key={idx} className="receipt-item-row receipt-unfulfilled">{name}</div>
+                                ))}
+                              </>
+                            )}
+                            <div className="receipt-divider thick"></div>
+                            <div className="receipt-total-row">
+                              <span>Subtotal</span>
+                              <span>${receipt.subtotal}</span>
+                            </div>
+                            {receipt.tip > 0 && (
+                              <div className="receipt-total-row receipt-tip">
+                                <span>Tip</span>
+                                <span>+${receipt.tip}</span>
+                              </div>
+                            )}
+                            <div className="receipt-total-row receipt-grand-total">
+                              <span>TOTAL</span>
+                              <span>${receipt.total}</span>
+                            </div>
+                            <div className="receipt-footer">
+                              {receipt.status === 'complete' ? 'THANK YOU!' : receipt.status === 'timeout' ? 'PATIENCE EXPIRED' : 'TRANSACTION ENDED'}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="zoomed-pos-btn zp-gray" onClick={() => {
+                          setRegisterScreen('main')
+                          setReceipt(null)
+                          dismissDialogue()
+                        }}>DONE</div>
                       </>
                     )}
                   </div>
