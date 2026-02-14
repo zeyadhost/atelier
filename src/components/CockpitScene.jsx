@@ -117,6 +117,7 @@ export default function CockpitScene() {
   const [currentCustomer, setCurrentCustomer] = useState(null)
   const [inputLocked, setInputLocked] = useState(false)
   const [serveResult, setServeResult] = useState(null)
+  const [registerScreen, setRegisterScreen] = useState('main')
   const bellTimeoutRef = useRef(null)
   const bellAudioRef = useRef(null)
   const pcAmbientRef = useRef(null)
@@ -645,6 +646,7 @@ export default function CockpitScene() {
       earnings
     })
     setCurrentCustomer(null)
+    setRegisterScreen('main')
     if (serveTimerRef.current) clearTimeout(serveTimerRef.current)
     serveTimerRef.current = setTimeout(() => setServeResult(null), 5000)
   }, [genSlots, currentCustomer, ringBell])
@@ -658,6 +660,7 @@ export default function CockpitScene() {
       earnings: 0
     })
     setCurrentCustomer(null)
+    setRegisterScreen('main')
     if (serveTimerRef.current) clearTimeout(serveTimerRef.current)
     serveTimerRef.current = setTimeout(() => setServeResult(null), 4000)
   }, [currentCustomer])
@@ -856,9 +859,7 @@ export default function CockpitScene() {
                 </div>
                 <div className="pos-buttons">
                   <div className="pos-btn pos-btn-orange">SERVE</div>
-                  <div className="pos-btn pos-btn-green">SCAN</div>
-                  <div className="pos-btn pos-btn-gray">VOID</div>
-                  <div className="pos-btn pos-btn-gray">REFUSE</div>
+                  <div className="pos-btn pos-btn-red">REFUSE</div>
                 </div>
               </div>
             </div>
@@ -996,82 +997,90 @@ export default function CockpitScene() {
                   </div>
                   <div className="zoomed-pos-body">
                     <div className="zoomed-pos-total">
-                      <span className="zoomed-pos-total-label">BALANCE</span>
+                      <span className="zoomed-pos-total-label">TOTAL</span>
                       <span className="zoomed-pos-total-amount">${money.toFixed(2)}</span>
                     </div>
 
-                    <div className="register-customer-section">
-                      {currentCustomer ? (
-                        <div className="register-customer-card">
-                          <img
-                            className="register-customer-avatar"
-                            src={currentCustomer.colorAvatar}
-                            alt={currentCustomer.name}
-                            draggable={false}
-                          />
-                          <div className="register-customer-details">
-                            <div className="register-customer-name">{currentCustomer.name}</div>
-                            <div className="register-customer-waiting">Waiting at window...</div>
-                            <div className="register-scan-results">
-                              <div className="register-scan-row"><span className="scan-label">Species:</span> <span className="scan-value">{currentCustomer.species}</span></div>
-                              <div className="register-scan-row"><span className="scan-label">Patience:</span> <span className="scan-value">{currentCustomer.patience}</span></div>
-                              <div className="register-scan-row"><span className="scan-label">Craving:</span> <span className="scan-value">{currentCustomer.craving}</span></div>
-                            </div>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="register-no-customer">
-                          {serveResult ? (
-                            <div className="register-serve-result">
-                              {serveResult.earnings > 0 ? (
-                                <>
-                                  <div className="serve-result-icon">{'\u2605'}</div>
-                                  <div className="serve-result-text">Served "{serveResult.pastryName}" to {serveResult.customerName}</div>
-                                  <div className="serve-result-reaction">"{serveResult.reaction}"</div>
-                                  <div className="serve-result-earnings">+${serveResult.earnings}</div>
-                                </>
-                              ) : (
-                                <>
-                                  <div className="serve-result-icon refuse">{'\u2716'}</div>
-                                  <div className="serve-result-text">Dismissed {serveResult.customerName}</div>
-                                  <div className="serve-result-reaction">"{serveResult.reaction}"</div>
-                                </>
-                              )}
+                    {registerScreen === 'main' && (
+                      <>
+                        <div className="zoomed-pos-items">
+                          {currentCustomer ? (
+                            <div className="register-customer-card">
+                              <img
+                                className="register-customer-avatar"
+                                src={currentCustomer.colorAvatar}
+                                alt={currentCustomer.name}
+                                draggable={false}
+                              />
+                              <div className="register-customer-details">
+                                <div className="register-customer-name">{currentCustomer.name}</div>
+                                <div className="register-customer-waiting">Waiting at window...</div>
+                                <div className="register-scan-results">
+                                  <div className="register-scan-row"><span className="scan-label">Species:</span> <span className="scan-value">{currentCustomer.species}</span></div>
+                                  <div className="register-scan-row"><span className="scan-label">Patience:</span> <span className="scan-value">{currentCustomer.patience}</span></div>
+                                  <div className="register-scan-row"><span className="scan-label">Craving:</span> <span className="scan-value">{currentCustomer.craving}</span></div>
+                                </div>
+                              </div>
                             </div>
                           ) : (
-                            <div className="register-empty-msg">No customer at window. Ring the bell.</div>
+                            <div className="register-no-customer">
+                              {serveResult ? (
+                                <div className="register-serve-result">
+                                  {serveResult.earnings > 0 ? (
+                                    <>
+                                      <div className="serve-result-icon">{'\u2605'}</div>
+                                      <div className="serve-result-text">Served "{serveResult.pastryName}" to {serveResult.customerName}</div>
+                                      <div className="serve-result-reaction">"{serveResult.reaction}"</div>
+                                      <div className="serve-result-earnings">+${serveResult.earnings}</div>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <div className="serve-result-icon refuse">{'\u2716'}</div>
+                                      <div className="serve-result-text">Dismissed {serveResult.customerName}</div>
+                                      <div className="serve-result-reaction">"{serveResult.reaction}"</div>
+                                    </>
+                                  )}
+                                </div>
+                              ) : (
+                                <div className="register-empty-msg">No customer at window. Ring the bell.</div>
+                              )}
+                            </div>
                           )}
                         </div>
-                      )}
-                    </div>
 
-                    {currentCustomer && readySlots.length > 0 && (
-                      <div className="register-serve-section">
-                        <div className="register-section-label">SERVE READY ITEM:</div>
-                        <div className="register-serve-slots">
-                          {readySlots.map(slot => (
-                            <div
-                              key={slot.index}
-                              className="register-serve-slot-btn"
-                              onClick={() => handleServe(slot.index)}
-                            >
-                              <span className="serve-slot-num">SLOT {slot.index}</span>
-                              <span className="serve-slot-name">"{slot.name}"</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
+                        {currentCustomer && (
+                          <div className="zoomed-pos-buttons">
+                            <div className="zoomed-pos-btn zp-orange" onClick={() => setRegisterScreen('serve')}>SERVE</div>
+                            <div className="zoomed-pos-btn zp-red" onClick={handleRefuse}>REFUSE</div>
+                          </div>
+                        )}
+                      </>
                     )}
 
-                    {currentCustomer && (
-                      <div className="register-actions">
-                        <div
-                          className="register-action-btn refuse-btn"
-                          onClick={handleRefuse}
-                        >
-                          REFUSE
+                    {registerScreen === 'serve' && (
+                      <>
+                        <div className="zoomed-pos-items">
+                          {readySlots.length > 0 ? (
+                            <div className="register-serve-slots">
+                              {readySlots.map(slot => (
+                                <div
+                                  key={slot.index}
+                                  className="register-serve-slot-btn"
+                                  onClick={() => handleServe(slot.index)}
+                                >
+                                  <span className="serve-slot-num">SLOT {slot.index}</span>
+                                  <span className="serve-slot-name">"{slot.name}"</span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="register-no-customer">
+                              <div className="register-empty-msg">No pastries available.</div>
+                            </div>
+                          )}
                         </div>
-                      </div>
+                        <div className="zoomed-pos-btn zp-gray" onClick={() => setRegisterScreen('main')}>BACK</div>
+                      </>
                     )}
                   </div>
                 </div>

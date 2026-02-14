@@ -1087,7 +1087,7 @@ body {
 
 .pos-buttons {
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr 1fr;
+    grid-template-columns: 1fr 1fr;
     gap: 3px;
 }
 
@@ -1117,6 +1117,12 @@ body {
     background: #1a1c22;
     color: #667;
     border: 1px solid #2a2e35;
+}
+
+.pos-btn-red {
+    background: #3a0a0a;
+    color: #ff4444;
+    border: 1px solid #5a1515;
 }
 
 .pos-stand {
@@ -1842,12 +1848,14 @@ body {
 
 .zoomed-pos-screen {
     width: 100%;
-    max-width: 500px;
+    max-width: 800px;
     background: #0d0e12;
     border-radius: 12px;
     border: 2px solid #1a1c22;
     overflow: hidden;
     box-shadow: 0 0 40px rgba(68, 204, 68, 0.04), 8px 8px 30px rgba(0,0,0,0.8);
+    display: flex;
+    flex-direction: column;
 }
 
 .zoomed-pos-header {
@@ -1903,10 +1911,12 @@ body {
 }
 
 .zoomed-pos-body {
+    flex: 1;
     padding: 16px;
     display: flex;
     flex-direction: column;
     gap: 12px;
+    overflow: hidden;
 }
 
 .zoomed-pos-total {
@@ -1934,11 +1944,19 @@ body {
 }
 
 .zoomed-pos-items {
+    flex: 1;
     background: #0a0b0f;
     border-radius: 4px;
     border: 1px solid #1a1c22;
     padding: 16px;
     min-height: 80px;
+    overflow-y: auto;
+}
+
+.zoomed-pos-buttons {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
 }
 
 .zoomed-pos-item-empty {
